@@ -18,6 +18,11 @@ __pycache__/
 dist/
 build/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+static/react-dist/
+
 # macOS
 .DS_Store
 

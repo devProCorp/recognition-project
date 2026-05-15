@@ -1,4 +1,7 @@
 anthropic==0.102.0
+dtaidistance==2.4.0
+flask>=3.0.0
+spafe==0.3.3
 elevenlabs==2.47.0
 imageio-ffmpeg==0.6.0
 noisereduce==3.0.3
