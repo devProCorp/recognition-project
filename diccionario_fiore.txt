@@ -1,0 +1,123 @@
+DICCIONARIO DE COMUNICACIÓN - FIORE
+====================================
+Extraído de audios-diccionario (14 mayo 2026)
+Transcripción: Whisper large-v3 + denoising (versión corregida)
+
+
+═══════════════════════════════════════
+AUDIO 1 — NOMBRES Y PALABRAS BASE
+═══════════════════════════════════════
+
+PERSONAS / NOMBRES
+------------------
+Pipo          → Felipe
+Fiore         → Fiorela (ella misma)
+Mamá          → Mamá / Mónica
+Papá          → Papá / Fernando
+Mi hijo       → José Rodrigo
+Abuela        → Abuela
+Tío / Tía     → Tío / Tía
+José Daniel   → José Daniel
+Luciana       → Luciana
+
+PALABRAS QUE PRONUNCIA BIEN
+----------------------------
+Hola
+Chao
+¿Cómo estás?
+¿Tú qué?
+Sí
+No
+No hay
+Agua
+
+PRONUNCIACIONES ESPECIALES
+---------------------------
+Pipo          → Felipe (nombre)
+dúvo          → ¿Dónde?
+Eneo no       → Eso no
+Eneo sí       → Eso sí
+
+
+═══════════════════════════════════════
+AUDIO 2 — DICCIONARIO PRINCIPAL
+═══════════════════════════════════════
+
+NECESIDADES Y DESEOS
+---------------------
+Agua                   → Quiero agua (lo dice correctamente)
+Calle                  → Quiero salir a la calle
+Acá (+ señala)         → Quiero ir al Centro Andino
+Acá (+ gesto mensaje)  → Quiero enviar un mensaje
+Acá (+ gesto baño)     → Quiero ir al baño (caca)
+Chichi                 → Quiero hacer pipí
+Caca                   → Quiero ir al baño (caca)
+Chocolate caliente     → Quiero chocolate caliente
+Milo                   → Quiero Milo
+Necesito               → Quiero algo (chocolate, milo u otra cosa)
+Ya                     → Ya terminé / estoy lista
+Ahora no más tarde     → Ahorita no, después
+
+PREGUNTAS QUE HACE
+-------------------
+¿Sí? (con tono)        → ¿De verdad? / ¿Sí?
+¿Qué es eso?           → ¿Qué es eso?
+¿Cómo estás?           → ¿Cómo estás?
+¿Qué haces?            → ¿Qué haces?
+¿Por qué?              → ¿Por qué?
+
+DESCRIPCIONES / CALIDAD
+------------------------
+Rico, rico, rico       → ¡Está rico! / ¡Me encanta!
+Maluco                 → Está malo / no me gusta
+Chico                  → Pequeño
+Grande                 → Grande
+Caliente               → Caliente
+Frío                   → Frío
+Hay poquito            → Hay poco
+No hay                 → No hay
+
+PERSONAS / ADJETIVOS
+---------------------
+Loco / Loca            → Loco / Loca
+Bruja                  → Bruja
+
+EXPRESIONES / EMOCIONES
+------------------------
+Ahora sí               → ¡Ahora sí! (alivio / acuerdo)
+Uh, sí, ya             → Expresión de confirmación
+Ahí                    → Expresión de conformidad ("bueno, está bien")
+Uy                     → No me gusta / disgusto
+Eso no                 → Eso no
+Eso sí                 → Eso sí
+Más o menos            → Más o menos
+Fuera                  → Vete / fuera
+Allá arriba            → Allá arriba
+Allá abajo             → Allá abajo
+Wepa / Súper Fiore     → Expresión de alegría / emoción
+
+CORRECCIONES SOCIALES
+----------------------
+Dede                   → Cállate  [pendiente confirmar con audio]
+Eco                    → Estás repitiendo lo mismo
+
+NÚMEROS QUE MANEJA
+-------------------
+Uno, dos, tres, cuatro, cinco
+
+
+═══════════════════════════════════════
+NOTAS PARA EL SISTEMA DE IA
+═══════════════════════════════════════
+
+1. "Acá" es la palabra más ambigua — su significado depende del contexto
+   físico (qué está señalando) y no puede resolverse solo con audio.
+
+2. "Necesito" aparece cuando quiere algo pero no dice exactamente qué —
+   Claude debe pedir contexto adicional en estos casos.
+
+3. "Dede" (cállate) está pendiente de confirmar escuchando el audio original.
+
+4. Fiore dice "agua" correctamente — no confundir con otras palabras.
+
+5. "Rico, rico, rico" (no "chico chico chico" — error del modelo small anterior).

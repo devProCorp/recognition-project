@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analista de Voz — Fiore</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f5f7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      color: #1d1d1f;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header p {
+      color: #6e6e73;
+      margin-top: 8px;
+      font-size: 1rem;
+    }
+
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 36px;
+      width: 100%;
+      max-width: 620px;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+    }
+
+    /* ─── Drop zone ─────────────────────────── */
+    #drop-zone {
+      border: 2px dashed #d1d1d6;
+      border-radius: 14px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: #0071e3;
+      background: #f0f7ff;
+    }
+
+    #drop-zone .icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    #drop-zone h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    #drop-zone p {
+      color: #6e6e73;
+      font-size: 0.9rem;
+    }
+
+    #drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ─── Audio preview ─────────────────────── */
+    #audio-preview {
+      display: none;
+      margin-top: 20px;
+    }
+
+    #audio-preview audio {
+      width: 100%;
+      border-radius: 8px;
+    }
+
+    #file-name {
+      font-size: 0.85rem;
+      color: #6e6e73;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    /* ─── Botón ──────────────────────────────── */
+    #btn-analizar {
+      display: none;
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: #0071e3;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #btn-analizar:hover { background: #0077ed; }
+    #btn-analizar:disabled { background: #a0c4f1; cursor: not-allowed; }
+
+    /* ─── Loading ────────────────────────────── */
+    #loading {
+      display: none;
+      margin-top: 28px;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #e5e5ea;
+      border-top-color: #0071e3;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading p {
+      color: #6e6e73;
+      font-size: 0.9rem;
+    }
+
+    #loading .step {
+      font-weight: 600;
+      color: #1d1d1f;
+      margin-top: 4px;
+    }
+
+    /* ─── Resultado ──────────────────────────── */
+    #resultado {
+      display: none;
+      margin-top: 28px;
+    }
+
+    .resultado-seccion {
+      margin-bottom: 20px;
+    }
+
+    .resultado-seccion label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6e6e73;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .resultado-seccion .contenido {
+      background: #f5f5f7;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #1d1d1f;
+    }
+
+    .interpretacion .contenido {
+      background: #e8f4fd;
+      font-size: 1.15rem;
+      font-weight: 500;
+      color: #004080;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .badge.ALTO  { background: #d1fae5; color: #065f46; }
+    .badge.MEDIO { background: #fef3c7; color: #92400e; }
+    .badge.BAJO  { background: #fee2e2; color: #991b1b; }
+
+    .nota {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #92400e;
+      background: #fef9c3;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    #btn-nuevo {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+      background: white;
+      color: #0071e3;
+      border: 1.5px solid #0071e3;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    #btn-nuevo:hover { background: #f0f7ff; }
+
+    /* ─── Error ──────────────────────────────── */
+    #error {
+      display: none;
+      margin-top: 20px;
+      background: #fee2e2;
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #991b1b;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Analista de Voz</h1>
+    <p>Sube un audio de Fiore y el sistema te dice qué quiso decir</p>
+  </header>
+
+  <div class="card">
+
+    <div id="drop-zone">
+      <input type="file" id="file-input" accept="audio/*,video/*,.mp4,.mp3,.wav,.ogg,.m4a,.webm">
+      <div class="icon">🎙️</div>
+      <h2>Arrastra el audio aquí</h2>
+      <p>o haz clic para seleccionar un archivo<br>MP4, MP3, WAV, M4A, OGG</p>
+    </div>
+
+    <div id="audio-preview">
+      <p id="file-name"></p>
+      <audio id="audio-player" controls></audio>
+    </div>
+
+    <button id="btn-analizar">Analizar lo que dijo Fiore</button>
+
+    <div id="loading">
+      <div class="spinner"></div>
+      <p>Procesando el audio...</p>
+      <p class="step" id="loading-step">Limpiando ruido de fondo</p>
+    </div>
+
+    <div id="error"></div>
+
+    <div id="resultado">
+      <div class="resultado-seccion">
+        <label>Whisper escuchó</label>
+        <div class="contenido" id="res-transcripcion"></div>
+      </div>
+      <div class="resultado-seccion interpretacion">
+        <label>Lo que Fiore quiso decir</label>
+        <div class="contenido" id="res-interpretacion"></div>
+      </div>
+      <div id="res-nota" class="nota" style="display:none"></div>
+      <button id="btn-nuevo">Analizar otro audio</button>
+    </div>
+
+  </div>
+
+  <script>
+    const dropZone     = document.getElementById('drop-zone');
+    const fileInput    = document.getElementById('file-input');
+    const audioPreview = document.getElementById('audio-preview');
+    const audioPlayer  = document.getElementById('audio-player');
+    const fileName     = document.getElementById('file-name');
+    const btnAnalizar  = document.getElementById('btn-analizar');
+    const loading      = document.getElementById('loading');
+    const loadingStep  = document.getElementById('loading-step');
+    const resultado    = document.getElementById('resultado');
+    const errorDiv     = document.getElementById('error');
+    const btnNuevo     = document.getElementById('btn-nuevo');
+
+    let archivoSeleccionado = null;
+
+    // Drag & drop
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) mostrarArchivo(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) mostrarArchivo(fileInput.files[0]);
+    });
+
+    function mostrarArchivo(file) {
+      archivoSeleccionado = file;
+      fileName.textContent = file.name;
+      audioPlayer.src = URL.createObjectURL(file);
+      audioPreview.style.display = 'block';
+      btnAnalizar.style.display = 'block';
+      resultado.style.display = 'none';
+      errorDiv.style.display = 'none';
+    }
+
+    // Animación de pasos mientras carga
+    const pasos = [
+      'Limpiando ruido de fondo...',
+      'Transcribiendo con Whisper large-v3...',
+      'Interpretando con IA...',
+      'Casi listo...'
+    ];
+    let pasoIdx = 0;
+    let pasoInterval = null;
+
+    function iniciarAnimacionPasos() {
+      pasoIdx = 0;
+      loadingStep.textContent = pasos[0];
+      pasoInterval = setInterval(() => {
+        pasoIdx = Math.min(pasoIdx + 1, pasos.length - 1);
+        loadingStep.textContent = pasos[pasoIdx];
+      }, 8000);
+    }
+
+    function detenerAnimacionPasos() {
+      clearInterval(pasoInterval);
+    }
+
+    btnAnalizar.addEventListener('click', async () => {
+      if (!archivoSeleccionado) return;
+
+      btnAnalizar.disabled = true;
+      loading.style.display = 'block';
+      resultado.style.display = 'none';
+      errorDiv.style.display = 'none';
+      iniciarAnimacionPasos();
+
+      const formData = new FormData();
+      formData.append('audio', archivoSeleccionado);
+
+      try {
+        const res = await fetch('/analizar', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Error del servidor');
+
+        // Confianza badge
+        const badge = `<span class="badge ${data.confianza}">${data.confianza}</span>`;
+        document.getElementById('res-transcripcion').textContent = data.transcripcion;
+        document.getElementById('res-interpretacion').innerHTML = data.interpretacion + badge;
+
+        const notaEl = document.getElementById('res-nota');
+        if (data.nota) {
+          notaEl.textContent = '⚠ ' + data.nota;
+          notaEl.style.display = 'block';
+        } else {
+          notaEl.style.display = 'none';
+        }
+
+        resultado.style.display = 'block';
+      } catch (err) {
+        errorDiv.textContent = '❌ ' + err.message;
+        errorDiv.style.display = 'block';
+      } finally {
+        detenerAnimacionPasos();
+        loading.style.display = 'none';
+        btnAnalizar.disabled = false;
+      }
+    });
+
+    btnNuevo.addEventListener('click', () => {
+      archivoSeleccionado = null;
+      fileInput.value = '';
+      audioPreview.style.display = 'none';
+      btnAnalizar.style.display = 'none';
+      resultado.style.display = 'none';
+      errorDiv.style.display = 'none';
+      audioPlayer.src = '';
+    });
+  </script>
+
+</body>
+</html>

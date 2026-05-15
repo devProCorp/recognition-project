@@ -1,0 +1,27 @@
+# Entorno virtual
+venv/
+
+# Keys y configuración sensible
+.env
+
+# Audios subidos por usuarios
+uploads/
+
+# Modelos descargados por Whisper
+~/.cache/whisper/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# Archivos temporales de transcripción
+*.wav
+transcripciones_mejoradas.json
+diccionario_transcripciones.json
