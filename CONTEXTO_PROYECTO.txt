@@ -1,0 +1,117 @@
+ANALISTA DE VOZ — FIORE
+Resumen de sesión de trabajo (15 mayo 2026)
+============================================
+
+
+¿QUÉ ES ESTE PROYECTO?
+-----------------------
+Sistema de IA que analiza audios de Fiore (Fiorela), una persona con
+dificultades de comunicación que ha desarrollado su propio vocabulario.
+
+El sistema:
+  1. Recibe un audio de Fiore
+  2. Limpia el ruido de fondo (noisereduce)
+  3. Transcribe con Whisper large-v3
+  4. Interpreta con GPT-4o usando el diccionario de Fiore
+  5. Muestra en pantalla lo que Fiore realmente quiso decir
+  6. (Pendiente) Devuelve audio con ElevenLabs
+
+
+¿QUÉ CONSTRUIMOS EN ESTA SESIÓN?
+----------------------------------
+
+1. INVESTIGACIÓN INICIAL
+   - Analizamos dos audios-diccionario de WhatsApp
+   - Audio 1: nombres de familia y palabras base
+   - Audio 2: diccionario completo narrado por un familiar/terapeuta
+     en formato "cuando quieres X, tú dices Y"
+
+2. TRANSCRIPCIÓN (transcribir_rapido.py)
+   - Probamos Whisper small → demasiados errores
+   - Migramos a Whisper large-v3 + denoising
+   - Corrección crítica: el modelo small dijo "Poblado" y "Chico chico chico"
+     cuando en realidad Fiore dice "Agua" y "Rico, rico, rico"
+   - Solución a ffmpeg: se usa imageio-ffmpeg (sin instalar ffmpeg en el sistema)
+
+3. DICCIONARIO (diccionario_fiore.txt)
+   Extraído de los audios y corregido con large-v3:
+
+   PRONUNCIACIONES ESPECIALES:
+   - Pipo       → Felipe
+   - dúvo       → ¿Dónde?
+   - Eneo no    → Eso no
+   - Eneo sí    → Eso sí
+
+   NECESIDADES:
+   - Agua             → Quiere agua (lo dice bien)
+   - Calle            → Quiere salir
+   - Acá              → Centro Andino / mensaje / baño (ambiguo, depende contexto)
+   - Chichi           → Pipí
+   - Caca             → Baño (caca)
+   - Necesito         → Quiere algo (chocolate, milo, etc.)
+   - Ya               → Terminé
+   - Ahora no más tarde → Después
+
+   EXPRESIONES:
+   - Rico rico rico   → ¡Está rico!
+   - Maluco           → No me gusta
+   - Dede             → Cállate
+   - Eco              → Estás repitiendo lo mismo
+   - Uy               → Disgusto
+   - Ahora sí         → Alivio / acuerdo
+   - Ahí              → Conformidad
+   - Wepa             → Alegría
+
+4. PIPELINE DE IA (pipeline.py)
+   - Usa Claude (claude-opus-4-7) como intérprete principal
+   - Fallback automático a GPT-4o si Claude no tiene créditos
+   - Devuelve JSON con: interpretacion + confianza (ALTO/MEDIO/BAJO) + nota
+   - "Acá" sin contexto → confianza BAJA automáticamente
+   - "Necesito" → confianza MEDIA + sugiere preguntar qué quiere
+
+5. FRONTEND WEB (app.py + templates/index.html)
+   - Servidor Flask en puerto 5050
+   - Drag & drop de audio
+   - Preview del audio antes de enviar
+   - Muestra: transcripción Whisper + interpretación + badge de confianza
+   - Indicador de pasos mientras procesa
+
+
+STACK TECNOLÓGICO
+-----------------
+- Python 3.9
+- openai-whisper (large-v3) — transcripción
+- noisereduce — limpieza de audio
+- imageio-ffmpeg — manejo de audio sin instalar ffmpeg
+- anthropic SDK — Claude como intérprete
+- openai SDK — GPT-4o como fallback
+- elevenlabs — (pendiente implementar) síntesis de voz
+- flask — servidor web
+- python-dotenv — manejo de API keys
+
+
+PENDIENTE (próxima sesión)
+--------------------------
+[ ] Integrar ElevenLabs para que el resultado también se escuche como audio
+[ ] Confirmar con el cuidador las entradas marcadas como [CONFIRMAR] en el diccionario
+[ ] Probar con audios reales de Fiore hablando sola (no los audios-diccionario)
+[ ] Ajustar el diccionario según errores que aparezcan en pruebas reales
+[ ] Considerar agregar historial de análisis para revisión posterior
+
+
+CÓMO CORRER EL PROYECTO
+------------------------
+  git clone https://github.com/devProCorp/recognition-project.git
+  cd recognition-project
+  bash setup.sh
+  # Editar .env con las API keys
+  venv/bin/python app.py
+  # Abrir http://localhost:5050
+
+
+API KEYS NECESARIAS
+-------------------
+  ANTHROPIC_API_KEY  → console.anthropic.com (necesita créditos)
+  OPENAI_API_KEY     → platform.openai.com (funciona como fallback)
+  ELEVENLABS_API_KEY → elevenlabs.io (para paso de síntesis de voz)
+  ELEVENLABS_VOICE_ID → ID de la voz elegida en ElevenLabs
