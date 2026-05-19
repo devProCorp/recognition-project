@@ -13,8 +13,14 @@ from motor_acustico import (
 from dotenv import load_dotenv
 import imageio_ffmpeg, subprocess
 from openai import OpenAI
+from supabase import create_client, Client
 
 load_dotenv()
+
+_supabase: Client = create_client(
+    os.getenv("NEXT_PUBLIC_SUPABASE_URL", ""),
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY", ""),
+)
 
 FFMPEG        = imageio_ffmpeg.get_ffmpeg_exe()
 SAMPLE_RATE   = 16000
@@ -65,6 +71,14 @@ def ruta_calibrar():
     try:
         audio = archivo_a_numpy(request.files["audio"])
         n_muestras = agregar_muestra(frase, audio)
+        try:
+            _supabase.table("calibraciones").insert({
+                "frase":   frase,
+                "muestras": n_muestras,
+                "fuente":  "manual",
+            }).execute()
+        except Exception:
+            pass
         return jsonify({
             "ok": True,
             "frase": frase,
@@ -88,7 +102,11 @@ def ruta_analizar():
         resultado = reconocer(audio)
 
         if resultado["frase"] is None:
-            return jsonify({"error": resultado["mensaje"]}), 400
+            return jsonify({
+                "no_reconocido": True,
+                "mensaje": resultado["mensaje"],
+                "distancia_dtw": resultado.get("distancia_dtw"),
+            })
 
         frase   = resultado["frase"]
         entrada = VOCABULARIO.get(frase, {})
@@ -103,6 +121,20 @@ def ruta_analizar():
             "segunda_opcion":   resultado.get("segunda_opcion"),
             "dist_segunda":     resultado.get("dist_segunda"),
         }
+
+        try:
+            _supabase.table("grabaciones").insert({
+                "frase_detectada": frase,
+                "significado":     entrada.get("significado", ""),
+                "urgencia":        entrada.get("urgencia", "BAJA"),
+                "respuesta":       entrada.get("respuesta", ""),
+                "confianza":       resultado["confianza"],
+                "distancia_dtw":   resultado["distancia_dtw"],
+                "segunda_opcion":  resultado.get("segunda_opcion"),
+                "dist_segunda":    resultado.get("dist_segunda"),
+            }).execute()
+        except Exception:
+            pass  # no bloquear la respuesta si falla la BD
 
         _historial.append({
             "frase": frase,
@@ -120,11 +152,34 @@ def ruta_analizar():
 
 @app.route("/historial")
 def ruta_historial():
-    return jsonify(list(reversed(_historial[-10:])))
+    try:
+        resp = (
+            _supabase.table("grabaciones")
+            .select("frase_detectada, significado, urgencia, created_at")
+            .order("created_at", desc=True)
+            .limit(10)
+            .execute()
+        )
+        rows = [
+            {
+                "frase":      r["frase_detectada"],
+                "significado": r["significado"],
+                "urgencia":    r["urgencia"],
+                "created_at":  r["created_at"],
+            }
+            for r in resp.data
+        ]
+        return jsonify(rows)
+    except Exception:
+        return jsonify(list(reversed(_historial[-10:])))
 
 
 @app.route("/historial", methods=["DELETE"])
 def limpiar_historial():
+    try:
+        _supabase.table("grabaciones").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+    except Exception:
+        pass
     _historial.clear()
     return jsonify({"ok": True})
 
@@ -272,6 +327,20 @@ def ruta_segmentar():
         ruta.unlink(missing_ok=True)
 
 
+@app.route("/calibrar/<frase>", methods=["DELETE"])
+def borrar_calibracion(frase: str):
+    """Elimina todas las muestras de una frase de la biblioteca DTW y Supabase."""
+    from motor_acustico import cargar_biblioteca, guardar_biblioteca
+    entries = cargar_biblioteca()
+    nuevas = [e for e in entries if e["frase"] != frase]
+    guardar_biblioteca(nuevas)
+    try:
+        _supabase.table("calibraciones").delete().eq("frase", frase).execute()
+    except Exception:
+        pass
+    return jsonify({"ok": True, "frase": frase, "eliminadas": len(entries) - len(nuevas)})
+
+
 @app.route("/segmento/<seg_id>")
 def ruta_segmento_audio(seg_id: str):
     if seg_id not in _segmentos:
@@ -287,6 +356,14 @@ def ruta_segmento_calibrar(seg_id: str):
     frase = seg["frase"]
     audio = audio_a_numpy(seg["ruta"])
     n     = agregar_muestra(frase, audio)
+    try:
+        _supabase.table("calibraciones").insert({
+            "frase":   frase,
+            "muestras": n,
+            "fuente":  "segmento",
+        }).execute()
+    except Exception:
+        pass
     return jsonify({"ok": True, "frase": frase, "muestras": n, "listo": n >= 3})
 
 

@@ -69,6 +69,12 @@ export async function calibrarSegmento(
   return res.json()
 }
 
+export async function borrarCalibracion(frase: string): Promise<{ ok: boolean }> {
+  const res = await fetch(`/calibrar/${encodeURIComponent(frase)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Error al borrar calibración')
+  return res.json()
+}
+
 export function urlSegmento(segId: string): string {
   return `/segmento/${segId}`
 }

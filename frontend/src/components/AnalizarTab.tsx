@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, DragEvent } from 'react'
-import { Mic, Upload, AlertTriangle, Loader2 } from 'lucide-react'
+import { Mic, Upload, AlertTriangle, Loader2, HelpCircle } from 'lucide-react'
 import { useRecorder } from '../hooks/useRecorder'
 import { analizar } from '../api'
 import type { ResultadoAnalisis } from '../types'
@@ -162,7 +162,26 @@ export function AnalizarTab() {
         </div>
       )}
 
-      {resultado && !loading && (
+      {resultado && !loading && resultado.no_reconocido && (
+        <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
+          <div className="px-6 py-4 flex items-center gap-3 bg-slate-100">
+            <HelpCircle size={20} className="text-slate-500" />
+            <span className="font-bold text-lg tracking-wide text-slate-600">No reconocido</span>
+          </div>
+          <div className="p-6 space-y-3">
+            <p className="text-slate-600 text-sm">
+              El audio no coincide con ninguna frase calibrada. Intenta grabar más cerca o calibra más muestras.
+            </p>
+            {resultado.distancia_dtw !== null && resultado.distancia_dtw !== undefined && (
+              <p className="text-xs text-slate-400 font-mono">
+                Distancia DTW: {resultado.distancia_dtw.toFixed(3)} (umbral: 0.800)
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {resultado && !loading && !resultado.no_reconocido && (
         <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
           <div
             className={`px-6 py-4 flex items-center gap-3 ${

@@ -21,11 +21,12 @@ BIBLIOTECA_PATH = Path("biblioteca_dtw.json")
 SAKOE_CHIBA_FRAC = 0.20
 
 # Umbral de rechazo: si la mejor distancia supera esto → "no reconocido"
-UMBRAL_RECHAZO = 0.80
+# Rango real del motor 52D: intra ~3.7-4.0, inter ~4.4-7.1
+UMBRAL_RECHAZO = 6.0
 
 UMBRAL_CONFIANZA = {
-    "ALTO":  0.30,
-    "MEDIO": 0.55,
+    "ALTO":  4.2,
+    "MEDIO": 5.0,
 }
 
 # Vocabulario de Fiore — significados y respuestas para el cuidador

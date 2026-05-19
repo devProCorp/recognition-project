@@ -29,6 +29,8 @@ const urgencyBadgeClass: Record<string, string> = {
   BAJA: 'bg-blue-100 text-blue-700',
 }
 
+const MAX_MUESTRAS = 3
+
 export function CalibrarTab({ vocabulario, estadoCalibracion, onEstadoUpdate }: Props) {
   const [modalFrase, setModalFrase] = useState<string | null>(null)
 
@@ -65,7 +67,8 @@ export function CalibrarTab({ vocabulario, estadoCalibracion, onEstadoUpdate }: 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {frases.map((frase) => {
                 const count = estadoCalibracion[frase] ?? 0
-                const listo = count >= 3
+                const listo = count >= MAX_MUESTRAS
+                const significado = vocabulario[frase]?.significado ?? ''
                 return (
                   <button
                     key={frase}
@@ -76,7 +79,7 @@ export function CalibrarTab({ vocabulario, estadoCalibracion, onEstadoUpdate }: 
                         : 'border-slate-200'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-1 mb-2">
+                    <div className="flex items-start justify-between gap-1 mb-1">
                       <span className="font-semibold text-sm text-slate-800 leading-tight">
                         {frase}
                       </span>
@@ -87,20 +90,33 @@ export function CalibrarTab({ vocabulario, estadoCalibracion, onEstadoUpdate }: 
                         />
                       )}
                     </div>
+
+                    {significado && (
+                      <p className="text-[11px] text-slate-500 leading-tight mb-2 line-clamp-2">
+                        {significado}
+                      </p>
+                    )}
+
                     <span
                       className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${urgencyBadgeClass[urgencia]}`}
                     >
                       {urgencia}
                     </span>
-                    <div className="flex gap-1.5 mt-3">
-                      {[0, 1, 2].map((i) => (
-                        <div
-                          key={i}
-                          className={`w-3 h-3 rounded-full transition-colors ${
-                            i < count ? 'bg-emerald-500' : 'bg-slate-200'
-                          }`}
-                        />
-                      ))}
+
+                    <div className="flex items-center gap-2 mt-3">
+                      <div className="flex gap-1.5">
+                        {Array.from({ length: MAX_MUESTRAS }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                              i < count ? 'bg-emerald-500' : 'bg-slate-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className={`text-[10px] font-semibold ${listo ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {listo ? 'Listo' : `${count}/${MAX_MUESTRAS}`}
+                      </span>
                     </div>
                   </button>
                 )

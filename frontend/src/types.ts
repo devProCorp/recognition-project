@@ -21,6 +21,8 @@ export interface ResultadoAnalisis {
   distancia_dtw: number
   segunda_opcion: string | null
   dist_segunda: number | null
+  no_reconocido?: boolean
+  mensaje?: string
 }
 
 export interface EntradaHistorial {

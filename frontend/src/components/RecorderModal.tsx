@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Mic, CheckCircle, Upload, FileAudio, Loader2 } from 'lucide-react'
+import { X, Mic, CheckCircle, Upload, FileAudio, Loader2, Trash2 } from 'lucide-react'
 import { useRecorder } from '../hooks/useRecorder'
-import { calibrar } from '../api'
+import { calibrar, borrarCalibracion } from '../api'
 
 type Mode = 'record' | 'upload'
 type Status = 'idle' | 'recording' | 'processing' | 'saved' | 'error'
@@ -11,9 +11,10 @@ interface Props {
   muestras: number
   onClose: () => void
   onSampleAdded: (newCount: number) => void
+  onDeleted?: () => void
 }
 
-export function RecorderModal({ frase, muestras, onClose, onSampleAdded }: Props) {
+export function RecorderModal({ frase, muestras, onClose, onSampleAdded, onDeleted }: Props) {
   const { isRecording, audioBlob, error: recError, startRecording, stopRecording, reset } =
     useRecorder()
   const [mode, setMode] = useState<Mode>('record')
@@ -23,7 +24,27 @@ export function RecorderModal({ frase, muestras, onClose, onSampleAdded }: Props
   const [elapsed, setElapsed] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [queueProgress, setQueueProgress] = useState<{ current: number; total: number } | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleDelete() {
+    if (!confirmDelete) { setConfirmDelete(true); return }
+    setDeleting(true)
+    try {
+      await borrarCalibracion(frase)
+      setCurrentMuestras(0)
+      onSampleAdded(0)
+      onDeleted?.()
+      onClose()
+    } catch {
+      setStatus('error')
+      setStatusMsg('Error al borrar la calibración')
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null
@@ -108,7 +129,23 @@ export function RecorderModal({ frase, muestras, onClose, onSampleAdded }: Props
           <X size={20} />
         </button>
 
-        <h2 className="text-xl font-bold text-slate-800 mb-1 pr-6 leading-tight">{frase}</h2>
+        <div className="flex items-start justify-between gap-2 pr-6 mb-1">
+          <h2 className="text-xl font-bold text-slate-800 leading-tight">{frase}</h2>
+          {currentMuestras > 0 && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors flex-shrink-0 mt-0.5 ${
+                confirmDelete
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'text-slate-400 hover:text-red-500 hover:bg-red-50'
+              }`}
+            >
+              {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+              {confirmDelete ? '¿Confirmar?' : 'Borrar'}
+            </button>
+          )}
+        </div>
         <p className="text-sm text-slate-500 mb-4">Calibración de voz</p>
 
         {/* Sample dots */}
