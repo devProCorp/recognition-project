@@ -3,12 +3,14 @@ Analista de Voz Fiore — servidor web
 Motor: DTW acústico personalizado (sin IA para el reconocimiento)
 """
 import os, uuid
+from typing import Optional
 import numpy as np
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file
 from motor_acustico import (
     audio_a_numpy, extraer_huella, reconocer,
-    agregar_muestra, estado_calibracion, VOCABULARIO
+    agregar_muestra, estado_calibracion, VOCABULARIO,
+    cargar_biblioteca, guardar_biblioteca,
 )
 from dotenv import load_dotenv
 import imageio_ffmpeg, subprocess
@@ -42,6 +44,27 @@ def archivo_a_numpy(archivo) -> np.ndarray:
         ruta.unlink(missing_ok=True)
 
 
+def _subir_audio_supabase(ruta_local: Path, frase: str) -> Optional[str]:
+    """Convierte a WAV y sube a Supabase Storage. Devuelve la URL pública."""
+    try:
+        wav_path = ruta_local.with_suffix(".wav")
+        subprocess.run(
+            [FFMPEG, "-y", "-i", str(ruta_local),
+             "-f", "wav", "-ar", str(SAMPLE_RATE), "-ac", "1", str(wav_path)],
+            capture_output=True,
+        )
+        nombre = f"{frase}/{uuid.uuid4().hex}.wav"
+        with open(wav_path, "rb") as f:
+            _supabase.storage.from_("calibraciones-audio").upload(
+                nombre, f, {"content-type": "audio/wav"}
+            )
+        wav_path.unlink(missing_ok=True)
+        url = _supabase.storage.from_("calibraciones-audio").get_public_url(nombre)
+        return url
+    except Exception:
+        return None
+
+
 # ─── Rutas ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
@@ -68,14 +91,21 @@ def ruta_calibrar():
     if "audio" not in request.files:
         return jsonify({"error": "Sin audio"}), 400
 
+    archivo = request.files["audio"]
+    ext  = Path(archivo.filename).suffix or ".webm"
+    ruta = UPLOAD_FOLDER / f"{uuid.uuid4().hex}{ext}"
+    archivo.save(ruta)
+
     try:
-        audio = archivo_a_numpy(request.files["audio"])
+        audio      = audio_a_numpy(str(ruta))
         n_muestras = agregar_muestra(frase, audio)
+        audio_url  = _subir_audio_supabase(ruta, frase)
         try:
             _supabase.table("calibraciones").insert({
-                "frase":   frase,
-                "muestras": n_muestras,
-                "fuente":  "manual",
+                "frase":     frase,
+                "muestras":  n_muestras,
+                "fuente":    "manual",
+                "audio_url": audio_url,
             }).execute()
         except Exception:
             pass
@@ -87,6 +117,8 @@ def ruta_calibrar():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        ruta.unlink(missing_ok=True)
 
 
 @app.route("/analizar", methods=["POST"])
@@ -356,22 +388,80 @@ def ruta_segmento_calibrar(seg_id: str):
     frase = seg["frase"]
     audio = audio_a_numpy(seg["ruta"])
     n     = agregar_muestra(frase, audio)
+    audio_url = _subir_audio_supabase(Path(seg["ruta"]), frase)
     try:
         _supabase.table("calibraciones").insert({
-            "frase":   frase,
-            "muestras": n,
-            "fuente":  "segmento",
+            "frase":     frase,
+            "muestras":  n,
+            "fuente":    "segmento",
+            "audio_url": audio_url,
         }).execute()
     except Exception:
         pass
     return jsonify({"ok": True, "frase": frase, "muestras": n, "listo": n >= 3})
 
 
+def reconstruir_desde_supabase() -> int:
+    """
+    Sincroniza biblioteca_dtw.json con los audios en Supabase Storage.
+    Solo reconstruye si el número de archivos en Supabase difiere del local.
+    Devuelve el total de huellas cargadas.
+    """
+    try:
+        carpetas = _supabase.storage.from_("calibraciones-audio").list("")
+        if not carpetas:
+            return len(cargar_biblioteca())
+
+        # Contar archivos en Supabase
+        total_supabase = 0
+        for carpeta in carpetas:
+            archivos = _supabase.storage.from_("calibraciones-audio").list(carpeta["name"])
+            total_supabase += len(archivos)
+
+        entradas_locales = cargar_biblioteca()
+        if len(entradas_locales) == total_supabase:
+            print(f"Biblioteca sincronizada ({total_supabase} huellas)", flush=True)
+            return total_supabase
+
+        # Reconstruir desde Supabase
+        print(f"Reconstruyendo biblioteca: {len(entradas_locales)} local → {total_supabase} en Supabase...", flush=True)
+        nuevas: list[dict] = []
+
+        for carpeta in carpetas:
+            frase = carpeta["name"]
+            if frase not in VOCABULARIO:
+                continue
+            archivos = _supabase.storage.from_("calibraciones-audio").list(frase)
+            for archivo in archivos:
+                path  = f"{frase}/{archivo['name']}"
+                temp  = UPLOAD_FOLDER / f"tmp_{uuid.uuid4().hex}.wav"
+                try:
+                    data = _supabase.storage.from_("calibraciones-audio").download(path)
+                    temp.write_bytes(data)
+                    audio  = audio_a_numpy(str(temp))
+                    huella = extraer_huella(audio)
+                    nuevas.append({"frase": frase, "huella": huella})
+                    print(f"  ✓ {frase}/{archivo['name']}", flush=True)
+                except Exception as e:
+                    print(f"  ✗ {path}: {e}", flush=True)
+                finally:
+                    temp.unlink(missing_ok=True)
+
+        guardar_biblioteca(nuevas)
+        print(f"Biblioteca reconstruida: {len(nuevas)} huellas", flush=True)
+        return len(nuevas)
+
+    except Exception as e:
+        print(f"Error al reconstruir biblioteca: {e}", flush=True)
+        return len(cargar_biblioteca())
+
+
 if __name__ == "__main__":
+    total = reconstruir_desde_supabase()
     cal = estado_calibracion()
     calibradas = sum(1 for v in cal.values() if v >= 3)
     print(f"Servidor listo en http://localhost:5050", flush=True)
-    print(f"Frases calibradas: {calibradas}/{len(VOCABULARIO)}", flush=True)
+    print(f"Frases calibradas: {calibradas}/{len(VOCABULARIO)} · {total} huellas en biblioteca", flush=True)
     if calibradas == 0:
         print("→ Abre el navegador y ve a la pestaña CALIBRAR para empezar.", flush=True)
     app.run(debug=False, port=5050)
