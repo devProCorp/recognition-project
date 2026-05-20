@@ -6,7 +6,7 @@ import os, uuid
 from typing import Optional
 import numpy as np
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from motor_acustico import (
     audio_a_numpy, extraer_huella, reconocer,
     agregar_muestra, estado_calibracion, VOCABULARIO,
@@ -44,33 +44,38 @@ def archivo_a_numpy(archivo) -> np.ndarray:
         ruta.unlink(missing_ok=True)
 
 
+def _slug(frase: str) -> str:
+    """Convierte frase a slug seguro para rutas de Storage (sin tildes ni espacios)."""
+    import unicodedata
+    s = unicodedata.normalize("NFD", frase)
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return s.lower().replace(" ", "_")
+
+
 def _subir_audio_supabase(ruta_local: Path, frase: str) -> Optional[str]:
-    """Convierte a WAV y sube a Supabase Storage. Devuelve la URL pública."""
+    """Convierte a WAV y sube a Supabase Storage. Devuelve la URL firmada."""
     try:
-        wav_path = ruta_local.with_suffix(".wav")
+        wav_path = UPLOAD_FOLDER / f"{uuid.uuid4().hex}.wav"
         subprocess.run(
             [FFMPEG, "-y", "-i", str(ruta_local),
              "-f", "wav", "-ar", str(SAMPLE_RATE), "-ac", "1", str(wav_path)],
-            capture_output=True,
+            capture_output=True, check=True,
         )
-        nombre = f"{frase}/{uuid.uuid4().hex}.wav"
+        carpeta = _slug(frase)
+        nombre  = f"{carpeta}/{uuid.uuid4().hex}.wav"
         with open(wav_path, "rb") as f:
             _supabase.storage.from_("calibraciones-audio").upload(
                 nombre, f, {"content-type": "audio/wav"}
             )
         wav_path.unlink(missing_ok=True)
-        url = _supabase.storage.from_("calibraciones-audio").get_public_url(nombre)
-        return url
-    except Exception:
+        res = _supabase.storage.from_("calibraciones-audio").create_signed_url(nombre, 3600 * 24 * 365)
+        return res.get("signedURL")
+    except Exception as e:
+        print(f"Aviso Storage: {e}", flush=True)
         return None
 
 
 # ─── Rutas ────────────────────────────────────────────────────────────────────
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
 
 @app.route("/vocabulario")
 def ruta_vocabulario():
@@ -97,18 +102,28 @@ def ruta_calibrar():
     archivo.save(ruta)
 
     try:
-        audio      = audio_a_numpy(str(ruta))
-        n_muestras = agregar_muestra(frase, audio)
-        audio_url  = _subir_audio_supabase(ruta, frase)
+        audio  = audio_a_numpy(str(ruta))
+        huella = extraer_huella(audio)
+
+        # Guardar huella en biblioteca local
+        entries = cargar_biblioteca()
+        entries.append({"frase": frase, "huella": huella})
+        guardar_biblioteca(entries)
+        n_muestras = sum(1 for e in entries if e["frase"] == frase)
+
+        # Persistir en Supabase (huella + audio)
+        audio_url = _subir_audio_supabase(ruta, frase)
         try:
             _supabase.table("calibraciones").insert({
                 "frase":     frase,
                 "muestras":  n_muestras,
                 "fuente":    "manual",
                 "audio_url": audio_url,
+                "huella":    huella.tolist(),
             }).execute()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Aviso: no se pudo guardar huella en Supabase: {e}", flush=True)
+
         return jsonify({
             "ok": True,
             "frase": frase,
@@ -384,10 +399,18 @@ def ruta_segmento_audio(seg_id: str):
 def ruta_segmento_calibrar(seg_id: str):
     if seg_id not in _segmentos:
         return jsonify({"error": "Segmento no encontrado"}), 404
-    seg   = _segmentos[seg_id]
-    frase = seg["frase"]
-    audio = audio_a_numpy(seg["ruta"])
-    n     = agregar_muestra(frase, audio)
+    seg    = _segmentos[seg_id]
+    frase  = seg["frase"]
+    audio  = audio_a_numpy(seg["ruta"])
+    huella = extraer_huella(audio)
+
+    # Guardar huella en biblioteca local
+    entries = cargar_biblioteca()
+    entries.append({"frase": frase, "huella": huella})
+    guardar_biblioteca(entries)
+    n = sum(1 for e in entries if e["frase"] == frase)
+
+    # Persistir en Supabase
     audio_url = _subir_audio_supabase(Path(seg["ruta"]), frase)
     try:
         _supabase.table("calibraciones").insert({
@@ -395,69 +418,60 @@ def ruta_segmento_calibrar(seg_id: str):
             "muestras":  n,
             "fuente":    "segmento",
             "audio_url": audio_url,
+            "huella":    huella.tolist(),
         }).execute()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Aviso: no se pudo guardar huella en Supabase: {e}", flush=True)
+
     return jsonify({"ok": True, "frase": frase, "muestras": n, "listo": n >= 3})
 
 
-def reconstruir_desde_supabase() -> int:
+def sincronizar_desde_supabase() -> int:
     """
-    Sincroniza biblioteca_dtw.json con los audios en Supabase Storage.
-    Solo reconstruye si el número de archivos en Supabase difiere del local.
-    Devuelve el total de huellas cargadas.
+    Carga las huellas directamente desde la tabla calibraciones de Supabase
+    y reconstruye biblioteca_dtw.json local. Instantáneo — sin descargar audio.
     """
     try:
-        carpetas = _supabase.storage.from_("calibraciones-audio").list("")
-        if not carpetas:
+        resp = (
+            _supabase.table("calibraciones")
+            .select("frase, huella")
+            .not_.is_("huella", "null")
+            .execute()
+        )
+        if not resp.data:
+            print("Sin huellas en Supabase — usando biblioteca local.", flush=True)
             return len(cargar_biblioteca())
 
-        # Contar archivos en Supabase
-        total_supabase = 0
-        for carpeta in carpetas:
-            archivos = _supabase.storage.from_("calibraciones-audio").list(carpeta["name"])
-            total_supabase += len(archivos)
-
-        entradas_locales = cargar_biblioteca()
-        if len(entradas_locales) == total_supabase:
-            print(f"Biblioteca sincronizada ({total_supabase} huellas)", flush=True)
-            return total_supabase
-
-        # Reconstruir desde Supabase
-        print(f"Reconstruyendo biblioteca: {len(entradas_locales)} local → {total_supabase} en Supabase...", flush=True)
         nuevas: list[dict] = []
-
-        for carpeta in carpetas:
-            frase = carpeta["name"]
+        for row in resp.data:
+            frase  = row["frase"]
             if frase not in VOCABULARIO:
                 continue
-            archivos = _supabase.storage.from_("calibraciones-audio").list(frase)
-            for archivo in archivos:
-                path  = f"{frase}/{archivo['name']}"
-                temp  = UPLOAD_FOLDER / f"tmp_{uuid.uuid4().hex}.wav"
-                try:
-                    data = _supabase.storage.from_("calibraciones-audio").download(path)
-                    temp.write_bytes(data)
-                    audio  = audio_a_numpy(str(temp))
-                    huella = extraer_huella(audio)
-                    nuevas.append({"frase": frase, "huella": huella})
-                    print(f"  ✓ {frase}/{archivo['name']}", flush=True)
-                except Exception as e:
-                    print(f"  ✗ {path}: {e}", flush=True)
-                finally:
-                    temp.unlink(missing_ok=True)
+            huella = np.array(row["huella"], dtype=np.float32)
+            if huella.ndim == 2 and huella.shape[1] == 52:
+                nuevas.append({"frase": frase, "huella": huella})
 
         guardar_biblioteca(nuevas)
-        print(f"Biblioteca reconstruida: {len(nuevas)} huellas", flush=True)
+        print(f"Biblioteca sincronizada: {len(nuevas)} huellas desde Supabase.", flush=True)
         return len(nuevas)
 
     except Exception as e:
-        print(f"Error al reconstruir biblioteca: {e}", flush=True)
+        print(f"Error al sincronizar desde Supabase: {e}", flush=True)
         return len(cargar_biblioteca())
 
 
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_react(path: str):
+    dist = Path("static/react-dist")
+    target = dist / path
+    if path and target.exists():
+        return send_from_directory(str(dist), path)
+    return send_from_directory(str(dist), "index.html")
+
+
 if __name__ == "__main__":
-    total = reconstruir_desde_supabase()
+    total = sincronizar_desde_supabase()
     cal = estado_calibracion()
     calibradas = sum(1 for v in cal.values() if v >= 3)
     print(f"Servidor listo en http://localhost:5050", flush=True)

@@ -61,11 +61,11 @@ export function RecorderModal({ frase, muestras, onClose, onSampleAdded, onDelet
     submitBlob(audioBlob)
   }, [audioBlob])
 
-  async function submitBlob(blob: Blob): Promise<number> {
+  async function submitBlob(blob: Blob, filename = 'audio.webm'): Promise<number> {
     setStatus('processing')
     setStatusMsg('Procesando...')
     try {
-      const res = await calibrar(frase, blob)
+      const res = await calibrar(frase, blob, filename)
       setCurrentMuestras(res.muestras)
       onSampleAdded(res.muestras)
       setStatus('saved')
@@ -93,7 +93,7 @@ export function RecorderModal({ frase, muestras, onClose, onSampleAdded, onDelet
       setQueueProgress({ current: i + 1, total: audioFiles.length })
       setStatusMsg(`Procesando archivo ${i + 1} de ${audioFiles.length}…`)
       setStatus('processing')
-      await submitBlob(audioFiles[i])
+      await submitBlob(audioFiles[i], audioFiles[i].name)
     }
 
     setQueueProgress(null)

@@ -21,10 +21,11 @@ export async function getEstadoCalibracion(): Promise<EstadoCalibracion> {
 export async function calibrar(
   frase: string,
   blob: Blob,
+  filename = 'audio.webm',
 ): Promise<{ ok: boolean; frase: string; muestras: number; listo: boolean }> {
   const formData = new FormData()
   formData.append('frase', frase)
-  formData.append('audio', blob, 'audio.webm')
+  formData.append('audio', blob, filename)
   const res = await fetch('/calibrar', { method: 'POST', body: formData })
   if (!res.ok) throw new Error('Error al calibrar')
   return res.json()
@@ -50,9 +51,15 @@ export async function limpiarHistorial(): Promise<{ ok: boolean }> {
   return res.json()
 }
 
-export async function segmentar(file: File): Promise<ResultadoSegmentacion> {
+export async function segmentar(
+  file: File,
+  ventana?: number,
+  gap?: number,
+): Promise<ResultadoSegmentacion> {
   const formData = new FormData()
   formData.append('audio', file, file.name)
+  if (ventana !== undefined) formData.append('ventana', String(ventana))
+  if (gap !== undefined) formData.append('gap', String(gap))
   const res = await fetch('/segmentar', { method: 'POST', body: formData })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))

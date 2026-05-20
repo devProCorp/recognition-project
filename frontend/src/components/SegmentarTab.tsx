@@ -183,19 +183,7 @@ export function SegmentarTab() {
     setError(null)
     setResultado(null)
     try {
-      const form = new FormData()
-      form.append('audio', file, file.name)
-      form.append('ventana', String(ventana))
-      form.append('gap', String(gap))
-      const res = await segmentar(file)
-      void res
-      // Re-call with params
-      const res2 = await fetch('/segmentar', { method: 'POST', body: form })
-      if (!res2.ok) {
-        const err = await res2.json().catch(() => ({})) as { error?: string }
-        throw new Error(err.error ?? 'Error')
-      }
-      setResultado(await res2.json())
+      setResultado(await segmentar(file, ventana, gap))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
     } finally {
