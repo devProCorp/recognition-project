@@ -5,9 +5,9 @@ import type { Vocabulario, EstadoCalibracion } from './types'
 import { CalibrarTab } from './components/CalibrarTab'
 import { AnalizarTab } from './components/AnalizarTab'
 import { HistorialPanel } from './components/HistorialPanel'
-import { SegmentarTab } from './components/SegmentarTab'
+// import { SegmentarTab } from './components/SegmentarTab'
 
-type Tab = 'analizar' | 'calibrar' | 'segmentar'
+type Tab = 'analizar' | 'calibrar'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('analizar')
@@ -85,7 +85,7 @@ export default function App() {
             {([
               ['analizar', 'Analizar'],
               ['calibrar', 'Calibrar'],
-              ['segmentar', 'Segmentar audio'],
+              // ['segmentar', 'Segmentar audio'],
             ] as [Tab, string][]).map(([t, label]) => (
               <button
                 key={t}
@@ -119,7 +119,7 @@ export default function App() {
                   onEstadoUpdate={handleEstadoUpdate}
                 />
               )}
-              {tab === 'segmentar' && <SegmentarTab />}
+              {/* tab === 'segmentar' && <SegmentarTab /> */}
             </div>
             <div className="lg:col-span-1">
               <HistorialPanel />
