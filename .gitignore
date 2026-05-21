@@ -1,8 +1,7 @@
 # Entorno virtual
 venv/
 
-# Keys y configuración sensible
-.env
+
 
 # Audios subidos por usuarios
 uploads/

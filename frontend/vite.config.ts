@@ -13,6 +13,7 @@ export default defineConfig({
       '/vocabulario': 'http://localhost:5050',
       '/segmentar': 'http://localhost:5050',
       '/segmento': 'http://localhost:5050',
+      '/audio_respuesta': 'http://localhost:5050',
     },
   },
   build: {

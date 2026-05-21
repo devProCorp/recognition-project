@@ -38,12 +38,19 @@ export function AnalizarTab() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const blobProcessed = useRef(false)
 
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
   const handleBlob = useCallback(async (blob: Blob) => {
     setLoading(true)
     setApiError(null)
     try {
       const res = await analizar(blob)
       setResultado(res)
+      if (res.audio_id && !res.no_reconocido) {
+        const audio = new Audio(`/audio_respuesta/${res.audio_id}`)
+        audioRef.current = audio
+        audio.play().catch(() => {})
+      }
     } catch {
       setApiError('Error al analizar el audio. Intenta de nuevo.')
     } finally {

@@ -15,6 +15,8 @@ from motor_acustico import (
 from dotenv import load_dotenv
 import imageio_ffmpeg, subprocess
 from openai import OpenAI
+from elevenlabs.client import ElevenLabs
+from flask import Response
 from supabase import create_client, Client
 
 load_dotenv()
@@ -30,8 +32,28 @@ app           = Flask(__name__)
 UPLOAD_FOLDER = Path("uploads")
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
-_historial:   list[dict] = []
-_segmentos:   dict[str, dict] = {}   # seg_id → {frase, ruta}
+_el_client  = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY", ""))
+JESSICA_ID  = "cgSgspJ2msm6clMCkdW9"  # Jessica — Playful, Bright, Warm
+
+_historial:        list[dict] = []
+_segmentos:        dict[str, dict] = {}   # seg_id → {frase, ruta}
+_audios_respuesta: dict[str, bytes] = {}  # audio_id → mp3 bytes
+
+
+def _generar_audio_respuesta(texto: str) -> Optional[str]:
+    try:
+        audio_gen = _el_client.text_to_speech.convert(
+            voice_id=JESSICA_ID,
+            text=texto,
+            model_id="eleven_multilingual_v2",
+        )
+        audio_bytes = b"".join(audio_gen)
+        audio_id = uuid.uuid4().hex[:10]
+        _audios_respuesta[audio_id] = audio_bytes
+        return audio_id
+    except Exception as e:
+        print(f"ElevenLabs error: {e}", flush=True)
+        return None
 
 
 def archivo_a_numpy(archivo) -> np.ndarray:
@@ -158,15 +180,19 @@ def ruta_analizar():
         frase   = resultado["frase"]
         entrada = VOCABULARIO.get(frase, {})
 
+        texto_respuesta = entrada.get("respuesta", "—")
+        audio_id = _generar_audio_respuesta(texto_respuesta)
+
         respuesta = {
             "frase_detectada":  frase,
             "significado":      entrada.get("significado", "—"),
             "urgencia":         entrada.get("urgencia", "BAJA"),
-            "respuesta":        entrada.get("respuesta", "—"),
+            "respuesta":        texto_respuesta,
             "confianza":        resultado["confianza"],
             "distancia_dtw":    resultado["distancia_dtw"],
             "segunda_opcion":   resultado.get("segunda_opcion"),
             "dist_segunda":     resultado.get("dist_segunda"),
+            "audio_id":         audio_id,
         }
 
         try:
@@ -458,6 +484,13 @@ def sincronizar_desde_supabase() -> int:
     except Exception as e:
         print(f"Error al sincronizar desde Supabase: {e}", flush=True)
         return len(cargar_biblioteca())
+
+
+@app.route("/audio_respuesta/<audio_id>")
+def ruta_audio_respuesta(audio_id: str):
+    if audio_id not in _audios_respuesta:
+        return jsonify({"error": "Audio no encontrado"}), 404
+    return Response(_audios_respuesta[audio_id], mimetype="audio/mpeg")
 
 
 @app.route("/", defaults={"path": ""})

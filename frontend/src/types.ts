@@ -23,6 +23,7 @@ export interface ResultadoAnalisis {
   dist_segunda: number | null
   no_reconocido?: boolean
   mensaje?: string
+  audio_id?: string
 }
 
 export interface EntradaHistorial {
